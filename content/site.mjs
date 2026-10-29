@@ -18,7 +18,7 @@ export const person = {
   resume: null,
   // Set to the deployed site's URL (no trailing slash) for canonical and
   // social-preview tags. Left null, those tags are omitted.
-  siteUrl: null,
+  siteUrl: 'https://krishshahdev.tech',
   // Unique-visitor counter, kept by the free Abacus counting API
   // (abacus.jasoncameron.dev). Each browser is counted once. Visits from
   // localhost go to `${key}-dev` so testing never touches the real count.
