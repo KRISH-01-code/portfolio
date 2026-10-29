@@ -13,7 +13,7 @@
     "preview": "node scripts/serve.mjs",
     "check": "node scripts/build.mjs && node scripts/check.mjs",
     "check:links": "node scripts/build.mjs && node scripts/check.mjs --online",
-    "test": "node --test test/",
+    "test": "node --test test/*.test.mjs",
     "test:visual": "node scripts/visual.mjs",
     "test:all": "npm test && npm run check && npm run test:visual && node scripts/visual.mjs --reduced-motion"
   },
