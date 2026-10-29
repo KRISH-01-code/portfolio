@@ -1,0 +1,23 @@
+{
+  "name": "krish-shah-portfolio",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Krish Shah's personal portfolio: a static site generated from content/site.mjs.",
+  "type": "module",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "dev": "node scripts/serve.mjs --watch",
+    "build": "node scripts/build.mjs",
+    "preview": "node scripts/serve.mjs",
+    "check": "node scripts/build.mjs && node scripts/check.mjs",
+    "check:links": "node scripts/build.mjs && node scripts/check.mjs --online",
+    "test": "node --test test/",
+    "test:visual": "node scripts/visual.mjs",
+    "test:all": "npm test && npm run check && npm run test:visual && node scripts/visual.mjs --reduced-motion"
+  },
+  "devDependencies": {
+    "playwright-core": "1.56.1"
+  }
+}

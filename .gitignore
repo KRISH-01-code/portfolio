@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.visual/
+.DS_Store
+scripts/blocklist.local.mjs
