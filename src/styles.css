@@ -689,8 +689,46 @@ a:hover .arrow--left { transform: translateX(-3px); }
 .contact__rows a:hover { color: var(--night-accent); }
 .contact__rows a:hover > span:not(.visually-hidden) { transform: translateX(8px); }
 .contact__rows .meta { text-transform: none; letter-spacing: 0; }
+
+/* Contact form, on the dark contact band in both modes. Fields check
+   themselves (main.js): a red edge and a message when something is wrong, a
+   lime edge once the email has passed every check. */
+.cform { grid-column: 1 / span 7; position: relative; display: grid; gap: 18px; padding: clamp(20px, 2.4vw, 32px); border: 1px solid var(--night-rule); border-radius: 18px; background: rgba(255, 255, 255, 0.02); --bad: #ff8b7b; }
+.cform__title { color: var(--night-accent); }
+.cform__row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.field { display: grid; gap: 8px; align-content: start; }
+.field__label { color: var(--night-ink-2); }
+.field input, .field textarea { width: 100%; padding: 13px 14px; background: var(--night-deep); color: var(--night-ink); border: 1px solid var(--night-rule); border-radius: 10px; font: 400 16px/1.45 var(--sans); transition: border-color 0.2s, box-shadow 0.2s; }
+.field textarea { min-height: 140px; resize: vertical; }
+.field input:focus, .field textarea:focus { outline: none; border-color: var(--night-accent); box-shadow: 0 0 0 3px rgba(212, 255, 63, 0.14); }
+.field.is-ok input { border-color: rgba(212, 255, 63, 0.55); }
+.field [aria-invalid='true'] { border-color: var(--bad); box-shadow: 0 0 0 3px rgba(255, 139, 123, 0.14); }
+/* Room for one line of message is always kept, so a message appearing
+   never shifts the fields or the send button under the pointer. */
+.field__msg { min-height: 1.45em; margin-top: -2px; font-size: 13.5px; line-height: 1.45; color: var(--bad); }
+.field__msg.is-info { color: var(--night-ink-2); }
+.field__msg.is-ok { color: var(--night-accent); }
+.field__msg button { padding: 0; background: none; border: 0; font: inherit; font-weight: 600; color: var(--night-accent); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.field__msg button + button { display: block; margin-top: 2px; color: var(--night-ink-2); font-weight: 400; }
+/* Spam trap: a field people never see or reach, which bots tend to fill. */
+.cform__trap { position: absolute; top: 0; left: 0; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); opacity: 0; pointer-events: none; }
+.cform__foot { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; }
+.cform__send[disabled] { opacity: 0.6; cursor: progress; }
+.cform__status { font-size: 14px; color: var(--night-ink-2); }
+.cform__status.is-error { color: var(--bad); }
+.cform__done { display: grid; gap: 10px; }
+.cform__done h3 { font: 380 clamp(30px, 3vw, 44px)/1.05 var(--serif); letter-spacing: -0.03em; color: var(--night-ink); }
+.cform__done h3 em { color: var(--night-accent); }
+.cform__done p { color: var(--night-ink-2); }
+.cform__done strong { color: var(--night-ink); font-weight: 600; }
+.cform__done button { justify-self: start; margin-top: 6px; }
+@media (prefers-reduced-motion: no-preference) {
+  .cform.is-shaking { animation: shake 0.45s cubic-bezier(0.36, 0.07, 0.19, 0.97); }
+}
+@keyframes shake { 20%, 80% { transform: translateX(-3px); } 40% { transform: translateX(6px); } 60% { transform: translateX(-6px); } }
+@media (max-width: 640px) { .cform__row { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 960px) {
-  .contact__title, .contact__side { grid-column: 1 / -1; }
+  .contact__title, .contact__side, .cform { grid-column: 1 / -1; }
 }
 
 /* ------------------------------------------------------------------- footer */

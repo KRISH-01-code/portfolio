@@ -184,11 +184,16 @@
   }
 
   // Unique visitors, kept by the Abacus counting API. A browser is counted
-  // the first time it visits and remembers its number, so coming back (or
-  // reloading) only reads the total. Without storage there is no telling a
-  // return visit from a new one, so those visits only read. Local testing
-  // counts against a separate -dev counter. If the API is unreachable,
-  // nothing about the counter shows.
+  // the first time it visits and remembers its number, so coming back,
+  // reloading or opening more tabs only reads the total. Not counted:
+  //   - the site's owner: opening any page with ?me marks this browser as
+  //     the owner's for good (?me=off undoes it);
+  //   - crawlers, link-preview bots and automated browsers;
+  //   - browsers that block storage, since a return visit can't be told
+  //     from a new one there (they still see the count);
+  //   - pages being prerendered until someone actually opens them.
+  // Local testing counts against a separate -dev counter. If the API is
+  // unreachable, nothing about the counter shows.
   //
   // The count appears three ways: the visitor log on the home page (split-
   // flap tiles), a live badge in the corner of every page, and, once, a
@@ -199,35 +204,68 @@
     const local = location.protocol === 'file:' || /^(localhost|127\.|\[::1\])/.test(location.hostname)
     const key = local ? `${baseKey}-dev` : baseKey
     const remembered = `visitor:${namespace}/${key}`
-    let mine = null
-    let storage = true
-    try {
-      mine = Number(localStorage.getItem(remembered)) || null
-    } catch {
-      storage = false
+    const ownerKey = `visitor-owner:${namespace}`
+    const store = {
+      get: (k) => {
+        try {
+          return localStorage.getItem(k)
+        } catch {
+          return undefined
+        }
+      },
+      set: (k, v) => {
+        try {
+          v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v)
+          return true
+        } catch {
+          return false
+        }
+      },
     }
-    const first = storage && !mine
-    fetch(`https://abacus.jasoncameron.dev/${first ? 'hit' : 'get'}/${namespace}/${key}`)
-      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
-      .then(({ value }) => {
-        if (!(value > 0)) return
-        if (first) {
-          mine = value
-          try {
-            localStorage.setItem(remembered, String(value))
-          } catch {}
-        }
-        const log = document.querySelector('[data-visits]')
-        if (log) {
-          log.hidden = false
-          flaps(log.querySelector('[data-flaps]'), value)
-          const you = log.querySelector('[data-visits-you]')
-          if (you && mine) you.innerHTML = `You’re visitor <strong>#${mine.toLocaleString('en-CA')}</strong>.`
-        }
-        badge(value, mine, log ? '#visitors' : 'index.html#visitors', first ? 9800 : 1200)
-        if (first) welcome(value)
-      })
-      .catch(() => {})
+    // ?me / ?me=off, then drop the parameter so it isn't shared by accident.
+    const params = new URLSearchParams(location.search)
+    if (params.has('me')) {
+      store.set(ownerKey, params.get('me') === 'off' ? null : '1')
+      params.delete('me')
+      history.replaceState(null, '', location.pathname + (params.size ? `?${params}` : '') + location.hash)
+    }
+    const owner = store.get(ownerKey) === '1'
+    const bot = navigator.webdriver || /bot|crawl|spider|slurp|preview|facebookexternalhit|embedly|lighthouse|headless/i.test(navigator.userAgent)
+    let mine = null
+    // Count only a real, new browser that can remember it was counted. Tabs
+    // opened at the same moment take turns (Web Locks): the first marks the
+    // browser and counts before the next one looks, so that one only reads.
+    const claim = () => {
+      const seen = store.get(remembered)
+      mine = Number(seen) || null
+      return !owner && !bot && seen === null && store.set(remembered, 'pending')
+    }
+    const show = (value, first) => {
+      const log = document.querySelector('[data-visits]')
+      if (log) {
+        log.hidden = false
+        flaps(log.querySelector('[data-flaps]'), value)
+        const you = log.querySelector('[data-visits-you]')
+        if (you && owner) you.innerHTML = 'You’re the <strong>owner</strong>. Your visits aren’t counted.'
+        else if (you && mine) you.innerHTML = `You’re visitor <strong>#${mine.toLocaleString('en-CA')}</strong>.`
+      }
+      badge(value, owner ? null : mine, log ? '#visitors' : 'index.html#visitors', first ? 9800 : 1200)
+      if (first) welcome(value)
+    }
+    const request = (first) =>
+      fetch(`https://abacus.jasoncameron.dev/${first ? 'hit' : 'get'}/${namespace}/${key}`)
+        .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+        .then(({ value }) => {
+          if (typeof value !== 'number' || value < 0) return Promise.reject(value)
+          if (first) (mine = value), store.set(remembered, String(value))
+          show(value, first)
+        })
+        // A failed count can be retried on the next visit.
+        .catch(() => first && store.set(remembered, null))
+    const count = () =>
+      navigator.locks ? navigator.locks.request(`count:${remembered}`, () => request(claim())) : request(claim())
+    if (document.prerendering) document.addEventListener('prerenderingchange', count, { once: true })
+    else count()
   }
   // A first-time visitor gets a card with their number, once.
   const welcome = (n) => {
@@ -367,6 +405,215 @@
         setLabel(button, label)
         if (status) status.textContent = ''
       }, 2400)
+    })
+  }
+
+  // Contact form. Each field is checked when the visitor leaves it and again
+  // on send. The email gets the most care, in this order:
+  //   1. shape: one @, no spaces, a dotted domain with a real-looking ending;
+  //   2. likely typos of common providers (gmial.com, hotmail.con, …), offered
+  //      as a one-click fix, or kept if the visitor insists;
+  //   3. throwaway inbox services, refused;
+  //   4. a live DNS lookup that the domain exists and can receive mail.
+  // Whether the mailbox itself exists can't be checked from a browser (mail
+  // providers don't say), so the confirmation repeats the address back.
+  const form = document.querySelector('[data-cform]')
+  if (form) {
+    const fields = {
+      name: form.querySelector('#cf-name'),
+      email: form.querySelector('#cf-email'),
+      message: form.querySelector('#cf-message'),
+    }
+    const send = form.querySelector('.cform__send')
+    const msgOf = (input) => form.querySelector(`#${input.id}-msg`)
+    const setState = (input, text = '', kind = 'error') => {
+      const msg = msgOf(input)
+      msg.className = `field__msg${text && kind !== 'error' ? ` is-${kind}` : ''}`
+      typeof text === 'string' ? (msg.textContent = text) : msg.replaceChildren(...text)
+      input.setAttribute('aria-invalid', String(Boolean(text) && kind === 'error'))
+      input.closest('.field').classList.toggle('is-ok', kind === 'ok')
+    }
+
+    const providers = ['gmail.com', 'googlemail.com', 'yahoo.com', 'yahoo.ca', 'yahoo.co.in', 'hotmail.com', 'outlook.com', 'live.com', 'msn.com', 'icloud.com', 'me.com', 'aol.com', 'protonmail.com', 'proton.me', 'gmx.com', 'zoho.com', 'yandex.com', 'rediffmail.com', 'uoguelph.ca', 'rogers.com', 'bell.net', 'shaw.ca', 'telus.net', 'sympatico.ca']
+    const tldFixes = { con: 'com', cmo: 'com', ocm: 'com', comm: 'com', coom: 'com', cpm: 'com', xom: 'com', vom: 'com', om: 'com', nte: 'net', ent: 'net', nett: 'net', ogr: 'org', orgg: 'org', cs: 'ca' }
+    const throwaway = ['mailinator.com', 'guerrillamail.com', 'sharklasers.com', '10minutemail.com', 'temp-mail.org', 'tempmail.com', 'yopmail.com', 'trashmail.com', 'getnada.com', 'dispostable.com', 'maildrop.cc', 'mohmal.com', 'emailondeck.com', 'fakeinbox.com', 'throwawaymail.com']
+    const distance = (a, b) => {
+      const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)])
+      for (let j = 1; j <= b.length; j++) d[0][j] = j
+      for (let i = 1; i <= a.length; i++)
+        for (let j = 1; j <= b.length; j++)
+          d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1), i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1] ? d[i - 2][j - 2] + 1 : Infinity)
+      return d[a.length][b.length]
+    }
+    // A corrected address, or null if nothing looks mistyped.
+    const suggest = (email) => {
+      const [local, domain] = email.split('@')
+      if (providers.includes(domain)) return null
+      const bare = providers.find((p) => p.split('.')[0] === domain)
+      if (bare) return `${local}@${bare}`
+      const parts = domain.split('.')
+      const tld = parts.at(-1)
+      if (tldFixes[tld]) {
+        const fixed = [...parts.slice(0, -1), tldFixes[tld]].join('.')
+        return `${local}@${providers.find((p) => distance(p, fixed) <= 1) ?? fixed}`
+      }
+      let best = null
+      for (const p of providers) {
+        const d = distance(domain, p)
+        if (d && d <= (p.length > 8 ? 2 : 1) && (!best || d < best.d)) best = { p, d }
+      }
+      return best ? `${local}@${best.p}` : null
+    }
+    const shapeError = (email) => {
+      if (!email) return 'Enter your email so I can reply.'
+      if (/\s/.test(email)) return 'An email address can’t contain spaces.'
+      const at = email.split('@')
+      if (at.length !== 2) return at.length < 2 ? 'This is missing the @, like name@example.com.' : 'An email address has only one @.'
+      const [local, domain] = at
+      if (!local) return 'Something needs to go before the @.'
+      if (!domain) return 'Add the part after the @, like gmail.com.'
+      if (local.length > 64 || email.length > 254) return 'That address is too long to be valid.'
+      if (/^\.|\.$|\.\./.test(local)) return 'The part before the @ can’t start or end with a dot, or have two dots in a row.'
+      if (/[^a-z0-9.!#$%&'*+/=?^_`{|}~-]/i.test(local)) return 'The part before the @ has a character emails can’t use.'
+      if (!domain.includes('.')) return `“${domain}” is missing its ending, like .com or .ca.`
+      if (!/^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,24}$/i.test(domain)) return `“${domain}” isn’t a valid email domain.`
+      return null
+    }
+    // Asks public DNS (Cloudflare's, over HTTPS) whether the domain can
+    // receive mail: true, false, or null when the lookup itself failed (then
+    // the visitor isn't blocked).
+    const lookups = new Map()
+    const receivesMail = (domain) => {
+      if (lookups.has(domain)) return lookups.get(domain)
+      const ask = (type) =>
+        fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=${type}`, {
+          headers: { accept: 'application/dns-json' },
+          signal: AbortSignal.timeout?.(5000),
+        }).then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      const result = ask('MX')
+        .then(async (mx) => {
+          if (mx.Status === 3) return false
+          if (mx.Status !== 0) return null
+          const records = (mx.Answer ?? []).filter((a) => a.type === 15)
+          // "0 ." is a domain saying outright that it takes no mail.
+          if (records.length) return !records.every((a) => /^0 \.?$/.test(a.data.trim()))
+          const a = await ask('A')
+          return a.Status === 0 && (a.Answer ?? []).some((r) => r.type === 1)
+        })
+        .catch(() => null)
+      lookups.set(domain, result)
+      return result
+    }
+
+    // Emails the visitor chose to keep despite a suggested correction.
+    const kept = new Set()
+    const fixButton = (label, onClick) => {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.textContent = label
+      b.addEventListener('click', onClick)
+      return b
+    }
+    let emailCheck = 0
+    const checkEmail = async () => {
+      const input = fields.email
+      const email = input.value.trim().toLowerCase()
+      input.value = email
+      const run = ++emailCheck
+      const shape = shapeError(email)
+      if (shape) return setState(input, shape), false
+      const better = !kept.has(email) && suggest(email)
+      if (better) {
+        setState(input, [
+          'Did you mean ',
+          fixButton(better, () => ((input.value = better), checkEmail(), input.focus())),
+          '?',
+          fixButton(`No, use ${email}`, () => (kept.add(email), checkEmail())),
+        ])
+        return false
+      }
+      const domain = email.split('@')[1]
+      if (throwaway.includes(domain)) return setState(input, 'That’s a throwaway inbox. Please use an address you’ll check for my reply.'), false
+      setState(input, 'Checking that this address can receive email…', 'info')
+      const ok = await receivesMail(domain)
+      if (run !== emailCheck) return false
+      if (ok === false) return setState(input, `“${domain}” doesn’t exist or can’t receive email. Check the part after the @.`), false
+      setState(input, ok ? '✓ This address can receive email.' : '', ok ? 'ok' : 'error')
+      return true
+    }
+    const checkName = () => {
+      const v = fields.name.value.trim()
+      setState(fields.name, v.length < 2 ? 'Tell me who you are (at least 2 letters).' : '')
+      return v.length >= 2
+    }
+    const checkMessage = () => {
+      const v = fields.message.value.trim()
+      const err = v.length < 10 ? 'Write a little more (at least 10 characters).' : v.length > 5000 ? 'That’s over 5,000 characters. Please trim it a little.' : ''
+      setState(fields.message, err)
+      return !err
+    }
+    const checks = { name: checkName, email: checkEmail, message: checkMessage }
+    for (const [key, input] of Object.entries(fields)) {
+      // Checked on leaving the field, unless the visitor is heading for the
+      // send button: sending checks everything anyway.
+      input.addEventListener('blur', (e) => input.value.trim() && e.relatedTarget !== send && checks[key]())
+      // Clear an error as soon as the visitor starts fixing it.
+      input.addEventListener('input', () => input.getAttribute('aria-invalid') === 'true' && setState(input))
+    }
+
+    const status = form.querySelector('.cform__status')
+    const shake = () => {
+      form.classList.remove('is-shaking')
+      void form.offsetWidth
+      form.classList.add('is-shaking')
+    }
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault()
+      status.textContent = ''
+      status.classList.remove('is-error')
+      const results = [checkName(), checkMessage(), await checkEmail()]
+      if (results.includes(false)) {
+        shake()
+        form.querySelector('[aria-invalid="true"]')?.focus()
+        return
+      }
+      if (form.elements._honey.value) return
+      send.disabled = true
+      status.textContent = 'Sending…'
+      const data = Object.fromEntries(new FormData(form))
+      data._replyto = data.email
+      try {
+        const res = await fetch(`https://formsubmit.co/ajax/${form.dataset.cform}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify(data),
+        })
+        const out = await res.json().catch(() => ({}))
+        if (!res.ok || String(out.success) !== 'true') throw new Error(out.message || res.status)
+        const done = document.createElement('div')
+        done.className = 'cform__done'
+        done.setAttribute('tabindex', '-1')
+        done.innerHTML = '<p class="meta">Message sent</p><h3>Thanks, <em></em></h3><p>I’ll reply to <strong></strong>. If that address isn’t right, send it again with the correct one.</p>'
+        done.querySelector('em').textContent = `${data.name.split(' ')[0]}.`
+        done.querySelector('strong').textContent = data.email
+        const again = fixButton('Send another message', () => {
+          form.reset()
+          Object.values(fields).forEach((input) => setState(input))
+          form.replaceChildren(...kids)
+          send.disabled = false
+          status.textContent = ''
+          fields.name.focus()
+        })
+        again.className = 'btn btn--light'
+        done.append(again)
+        const kids = [...form.children]
+        form.replaceChildren(done)
+        done.focus()
+      } catch {
+        send.disabled = false
+        status.classList.add('is-error')
+        status.textContent = `Couldn’t send right now. Please email me at ${form.dataset.cform} instead.`
+      }
     })
   }
 
@@ -730,7 +977,7 @@
       labelled = Boolean(hit)
       if (hit) label.textContent = hit[1]
       const active = !hit && Boolean(target?.closest?.('a, button, [role="button"], label, summary, .ch'))
-      const text = !hit && !active && Boolean(target?.closest?.('p, li, dd, dt, blockquote, figcaption, h1, h2, h3, h4, .meta'))
+      const text = !hit && !active && Boolean(target?.closest?.('p, li, dd, dt, blockquote, figcaption, h1, h2, h3, h4, .meta, input, textarea'))
       cursor.classList.toggle('is-label', labelled)
       cursor.classList.toggle('is-active', active)
       cursor.classList.toggle('is-text', text)

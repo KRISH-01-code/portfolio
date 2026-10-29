@@ -491,9 +491,40 @@ function contactSection(contact, person) {
           ${person.resume ? `<li><a href="${esc(person.resume)}"><span>Resume</span><span class="meta">PDF</span>${arrow('right')}</a></li>` : ''}
         </ul>
       </div>
+      ${contact.form ? contactForm(person) : ''}
     </div>
   </div>
 </section>`
+}
+
+// The contact form. Works without JavaScript as a plain POST to FormSubmit;
+// main.js checks the fields (including whether the email's domain can
+// receive mail) and sends it in place instead.
+function contactForm(person) {
+  const field = (id, label, input) => `
+        <div class="field">
+          <label class="field__label meta" for="cf-${id}">${label}</label>
+          ${input}
+          <p class="field__msg" id="cf-${id}-msg"></p>
+        </div>`
+  return `
+      <form class="cform" action="https://formsubmit.co/${esc(person.email)}" method="POST" novalidate data-cform="${esc(person.email)}" data-reveal aria-labelledby="cform-title">
+        <p class="cform__title meta" id="cform-title">Send a message</p>
+        <div class="cform__row">${field('name', 'Your name', '<input id="cf-name" name="name" type="text" autocomplete="name" required maxlength="100" aria-describedby="cf-name-msg">')}${field(
+          'email',
+          'Your email',
+          '<input id="cf-email" name="email" type="email" autocomplete="email" inputmode="email" autocapitalize="off" spellcheck="false" required maxlength="254" aria-describedby="cf-email-msg">',
+        )}
+        </div>${field('message', 'Message', '<textarea id="cf-message" name="message" rows="5" required minlength="10" maxlength="5000" aria-describedby="cf-message-msg"></textarea>')}
+        <input type="hidden" name="_subject" value="New message from krishshahdev.tech">
+        <input type="hidden" name="_template" value="table">
+        <input type="hidden" name="_captcha" value="false">
+        <div class="cform__trap" aria-hidden="true"><label>Leave this empty <input type="text" name="_honey" tabindex="-1" autocomplete="off"></label></div>
+        <div class="cform__foot">
+          <button class="btn btn--light cform__send" type="submit">Send message${arrow('right')}</button>
+          <p class="cform__status" role="status" aria-live="polite"></p>
+        </div>
+      </form>`
 }
 
 export function renderHome(site) {

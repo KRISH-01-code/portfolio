@@ -42,8 +42,22 @@ The hero shows a unique-visitor count from the free Abacus counting API
 (`person.visitorCounter` in `content/site.mjs`; set it to `null` to remove
 it). Each browser is counted once and remembers its number in
 `localStorage`; a first-time visitor gets a small welcome card with it.
-Visits from `localhost` count against a separate `-dev` counter. The count is
-public and not tamper-proof: anyone can call the API.
+Visits from `localhost` count against a separate `-dev` counter.
+
+Not counted: crawlers and automated browsers, browsers that block storage, and
+your own browsers once you open the site with `?me` (for example
+`https://krishshahdev.tech/?me`; `?me=off` undoes it). Tabs opened at the same
+moment count once. The same person on another browser or device is counted
+again, since there's no server to recognise them, and the count is public and
+not tamper-proof: anyone can call the API.
+
+To reset the count, use the admin key saved outside the repo in
+`~/.config/portfolio/abacus-admin-key`:
+
+```bash
+curl -X POST -H "Authorization: Bearer $(cat ~/.config/portfolio/abacus-admin-key)" \
+  https://abacus.jasoncameron.dev/reset/krishshah-portfolio/visitors
+```
 
 ### Adding a project
 

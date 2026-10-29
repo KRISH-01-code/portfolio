@@ -20,10 +20,11 @@ export const person = {
   // social-preview tags. Left null, those tags are omitted.
   siteUrl: 'https://krishshahdev.tech',
   // Unique-visitor counter, kept by the free Abacus counting API
-  // (abacus.jasoncameron.dev). Each browser is counted once. Visits from
-  // localhost go to `${key}-dev` so testing never touches the real count.
-  // Set to null to remove the counter.
-  visitorCounter: { namespace: 'krishshah-portfolio', key: 'unique-visitors' },
+  // (abacus.jasoncameron.dev). Each browser is counted once; open the site
+  // with ?me to stop counting your own browser. Visits from localhost go to
+  // `${key}-dev` so testing never touches the real count. The counter's admin
+  // key (to reset it) is kept outside the repo. Set to null to remove it.
+  visitorCounter: { namespace: 'krishshah-portfolio', key: 'visitors' },
   profiles: [
     { label: 'GitHub', display: 'github.com/KRISH-01-code', href: 'https://github.com/KRISH-01-code' },
     { label: 'LinkedIn', display: 'linkedin.com/in/krish-shah-5093211b5', href: 'https://www.linkedin.com/in/krish-shah-5093211b5/' },
@@ -341,5 +342,11 @@ export const record = [
 
 export const contact = {
   title: 'Hiring for a software internship, or curious about a project? *Write to me.*',
-  lede: 'Email is the quickest way to reach me. My code is on GitHub.',
+  lede: 'Send a message with the form, or email me directly. My code is on GitHub.',
+  // Messages from the contact form are delivered to person.email by
+  // FormSubmit (formsubmit.co), a free form-to-email service with no account.
+  // The first message ever sent triggers an activation email to that address;
+  // click its link once and every message after arrives normally. Set to
+  // false to remove the form.
+  form: true,
 }
