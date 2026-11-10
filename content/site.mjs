@@ -25,6 +25,11 @@ export const person = {
   // `${key}-dev` so testing never touches the real count. The counter's admin
   // key (to reset it) is kept outside the repo. Set to null to remove it.
   visitorCounter: { namespace: 'krishshah-portfolio', key: 'visitors' },
+  // Google Analytics 4 measurement ID. The tag loads only on siteUrl's domain
+  // (not localhost, not copies hosted elsewhere) and never in a browser
+  // marked as the owner with ?me.
+  // Set to null to remove it.
+  analytics: 'G-LYL0792Q3D',
   profiles: [
     { label: 'GitHub', display: 'github.com/KRISH-01-code', href: 'https://github.com/KRISH-01-code' },
     { label: 'LinkedIn', display: 'linkedin.com/in/krish-shah-5093211b5', href: 'https://www.linkedin.com/in/krish-shah-5093211b5/' },

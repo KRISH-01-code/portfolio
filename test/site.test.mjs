@@ -53,6 +53,13 @@ test('optional resume and site URL stay hidden until set', () => {
   assert.ok(html.includes(`mailto:${site.person.email}`))
 })
 
+test('analytics tag appears only when an ID is set', () => {
+  const tagged = renderHome(site)
+  if (site.person.analytics) assert.ok(tagged.includes(`"${site.person.analytics}"`) && tagged.includes('googletagmanager.com'))
+  const bare = renderHome({ ...site, person: { ...site.person, analytics: null } })
+  assert.ok(!bare.includes('googletagmanager.com') && !bare.includes('Google Analytics'))
+})
+
 test('pages render with one h1 each', () => {
   for (const html of [renderHome(site), ...site.projects.map((p) => renderProject(site, p))]) {
     assert.equal(html.match(/<h1\b/g).length, 1)

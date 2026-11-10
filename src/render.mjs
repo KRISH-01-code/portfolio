@@ -106,12 +106,27 @@ function footer(person) {
       </ul>
     </nav>
     <div class="footer__legal meta">
-      <p>© ${new Date().getFullYear()} Krish Shah · Built from plain HTML, CSS and a little JavaScript</p>
+      <p>© ${new Date().getFullYear()} Krish Shah · Built from plain HTML, CSS and a little JavaScript${person.analytics ? ' · Visits measured with Google Analytics' : ''}</p>
       <a class="footer__top" href="#top">Back to top${arrow('up')}</a>
     </div>
   </div>
   <div class="footer__mark" aria-hidden="true" data-clip><span>Krish Shah<span class="dot">.</span></span></div>
 </footer>`
+}
+
+// Google Analytics, loaded async so it never holds up the page. It runs only
+// on the real domain (not local testing, not copies hosted elsewhere) and not
+// in the owner's browser (the same ?me flag the visitor counter uses), so
+// Krish's own visits don't show up in the reports.
+function analytics(person) {
+  if (!person.siteUrl) return ''
+  const id = JSON.stringify(person.analytics)
+  const host = JSON.stringify(new URL(person.siteUrl).hostname)
+  const ownerKey = JSON.stringify(`visitor-owner:${person.visitorCounter?.namespace}`)
+  return `<script>(function(){var l=location,o=null,m=new URLSearchParams(l.search).get('me');try{o=localStorage.getItem(${ownerKey})}catch(e){}
+if(l.hostname!==${host}||(m!==null?m!=='off':o==='1'))return;
+var s=document.createElement('script');s.async=true;s.src='https://www.googletagmanager.com/gtag/js?id='+${id};document.head.appendChild(s);
+var d=window.dataLayer=window.dataLayer||[],g=window.gtag=function(){d.push(arguments)};g('js',new Date());g('config',${id})})()</script>`
 }
 
 function document({ title, description, body, person, path = '', bodyClass = '' }) {
@@ -144,6 +159,7 @@ ${ogImage ? `<meta property="og:image" content="${esc(ogImage)}">\n<meta name="t
      the timer shows everything anyway if the script never runs. -->
 <script>document.documentElement.classList.add('js');setTimeout(function(){document.documentElement.classList.add('is-ready')},2000)</script>
 <script src="main.js" defer></script>
+${person.analytics ? analytics(person) : ''}
 </head>
 <body${bodyClass ? ` class="${bodyClass}"` : ''}${person.visitorCounter ? ` data-counter="${esc(JSON.stringify(person.visitorCounter))}"` : ''}>
 ${body}
